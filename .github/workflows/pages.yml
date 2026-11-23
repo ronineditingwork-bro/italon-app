@@ -13,9 +13,11 @@ permissions:
   id-token: write
 concurrency:
   group: pages
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/cache@v4
@@ -27,13 +29,14 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p _site/data media
-          curl -fsSL --retry 4 -o _site/data/catalog.json https://italon-x2.ru/data/catalog.json
-          test "$(jq '.products | length' _site/data/catalog.json)" -gt 500
+          if curl -fsSL --connect-timeout 15 --max-time 60 --retry 3 -o catalog.new https://italon-x2.ru/data/catalog.json && [ "$(jq '.products | length' catalog.new)" -gt 500 ]; then cp catalog.new media/catalog.json; fi
+          cp media/catalog.json _site/data/catalog.json
           jq -r '.products[].image.src // empty' _site/data/catalog.json | sort -u | grep -E '^media/[A-Za-z0-9_/-]+\.(webp|jpe?g|png)$' > list.txt
           while read -r f; do
             if [ ! -s "$f" ]; then mkdir -p "$(dirname "$f")"; echo "$f"; fi
           done < list.txt > todo.txt
-          xargs -r -P 6 -I{} sh -c 'curl -fsSL --retry 3 -o "{}.part" "https://italon-x2.ru/{}" && mv "{}.part" "{}" || true' < todo.txt
+          wc -l < todo.txt
+          timeout 360 xargs -r -P 8 -a todo.txt -I{} sh -c 'curl -fsSL --connect-timeout 10 --max-time 30 --retry 1 -o "{}.part" "https://italon-x2.ru/{}" && mv "{}.part" "{}" || true' || true
           find media -name '*.part' -delete
           cp -r app index.html robots.txt _site/
           while read -r f; do
