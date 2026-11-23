@@ -30,6 +30,7 @@ jobs:
           set -euo pipefail
           mkdir -p _site/data media
           if curl -fsSL --connect-timeout 15 --max-time 60 --retry 3 -o catalog.new https://italon-x2.ru/data/catalog.json && [ "$(jq '.products | length' catalog.new)" -gt 500 ]; then cp catalog.new media/catalog.json; fi
+          [ -s media/catalog.json ] || cp catalog.json media/catalog.json
           cp media/catalog.json _site/data/catalog.json
           jq -r '.products[].image.src // empty' _site/data/catalog.json | sort -u | grep -E '^media/[A-Za-z0-9_/-]+\.(webp|jpe?g|png)$' > list.txt
           while read -r f; do
